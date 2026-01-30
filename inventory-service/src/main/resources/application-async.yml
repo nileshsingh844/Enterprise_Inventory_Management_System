@@ -1,0 +1,410 @@
+# Enhanced Inventory Service Configuration with Multithreading and File Pooling
+# This YAML file configures the inventory service with async processing capabilities
+
+spring:
+  application:
+    name: inventory-service
+  cloud:
+    config:
+      uri: http://localhost:8888
+      fail-fast: true
+  datasource:
+    url: jdbc:mysql://localhost:3306/inventory_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: inventory_user
+    password: inventory_pass
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # Connection pool configuration
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      connection-test-timeout: 5000
+      pool-name: InventoryHikariCP
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: false
+        maintainTimeStats: false
+        logAbandonedConnections: false
+        removeAbandoned: false
+        logAbandonedOnTimeout: false
+        net.sf.jsql.expand_sql: false
+        useSSL: false
+        allowPublicKeyRetrieval: true
+        useCursorFetch: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        maintainTimeStats: false
+        net.sf.jsql.expand_sql: false
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: false
+        maintainTimeStats: false
+        logAbandonedConnections: false
+        removeAbandoned: false
+        logAbandonedOnTimeout: false
+    jpa:
+      database-platform: org.hibernate.dialect.MySQL8Dialect
+      hibernate:
+        ddl-auto: update
+        show-sql: true
+        format_sql: true
+        hibernate:
+          format_sql: true
+          use_sql_comments: true
+          use_sql_comments: true
+          show_sql: true
+          use_new_id_generator: true
+          generate_statistics: true
+          jdbc:
+            batch_size: 20
+            fetch_size: 20
+            batch_versioned: true
+          properties:
+            hibernate.dialect: org.hibernate.dialect.MySQL8Dialect
+            hibernate.enable_lazy_load_no_transactions: true
+            hibernate.cache.use_second_level_cache: true
+            hibernate.cache.use_query_cache: true
+            hibernate.cache.use_reference_entities: true
+            hibernate.jdbc.batch_size: 20
+            hibernate.order_inserts: true
+            hibernate.generate_statistics: true
+            hibernate.jdbc.batch_versioned: true
+            hibernate.cache.use_second_level_cache: true
+            hibernate.cache.use_query_cache: true
+            hibernate.cache.use_reference_entities: true
+            hibernate.cache.use_structured_cache: true
+            hibernate.cache.use_query_cache: true
+            hibernate.cache.use_minimal_puts: true
+            hibernate.cache.use_second_level_cache: true
+            hibernate.cache.use_query_cache: true
+            hibernate.cache.use_reference_entities: true
+            hibernate.cache.use_structured_cache: true
+
+# Async processing configuration
+async:
+  executor:
+    # Core thread pool for general async operations
+    core-pool-size: 2
+    max-pool-size: 5
+    queue-capacity: 100
+    thread-name-prefix: "Inventory-Async-"
+    rejection-policy: CALLER_RUNS_POLICY
+    keep-alive-seconds: 60
+    allow-core-thread-timeout: true
+    wait-for-tasks-to-complete-on-shutdown: true
+    await-termination-seconds: 30
+  
+  # File processing thread pool for I/O operations
+  file-processing:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 50
+    thread-name-prefix: "File-Processing-"
+    rejection-policy: CALLER_RUNS_POLICY
+    keep-alive-seconds: 120
+    allow-core-thread-timeout: true
+    wait-for-tasks-to-complete-on-shutdown: true
+    await-termination-seconds: 60
+  
+  # Notification thread pool for non-critical operations
+  notification:
+    core-pool-size: 3
+    max-pool-size: 6
+    queue-capacity: 100
+    thread-name-prefix: "Notification-"
+    rejection-policy: DISCARD_POLICY
+    keep-alive-seconds: 60
+    allow-core-thread-timeout: true
+    wait-for-tasks-to-complete-on-shutdown: true
+    await-termination-seconds: 30
+  
+  # Scheduled task thread pool for periodic operations
+  scheduled:
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 25
+    thread-name-prefix: "Scheduled-Task-"
+    rejection-policy: CALLER_RUNS_POLICY
+    keep-alive-seconds: 30
+    allow-core-thread-timeout: true
+    wait-for-tasks-to-complete-on-shutdown: true
+    await-termination-seconds: 30
+
+# File processing configuration
+file:
+  import:
+    enabled: true
+    upload:
+      max-file-size: 10MB
+      max-request-size: 1MB
+      temp-dir: /tmp/inventory-uploads
+  export:
+    enabled: true
+    temp-dir: /tmp/inventory-exports
+
+# Monitoring and metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,threaddump
+  metrics:
+    export:
+      enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.mvc.controller: true
+        spring.datasource: true
+        hibernate: true
+        cache: true
+        tomcat:
+          cache: true
+          threads: true
+          servlet: true
+          jsp: true
+          session: true
+  health:
+    circuitbreakers:
+      enabled: true
+      hystrix:
+        metrics:
+          health.indicator:
+            enabled: true
+        metrics:
+          enabled: true
+  endpoint:
+    health:
+      show-details: always
+      info:
+        show-details: always
+
+# Performance tuning
+server:
+  tomcat:
+    max-threads: 200
+    accept-count: 100
+    connection-timeout: 20000
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+  servlet:
+        multipart:
+          max-file-size: 10MB
+          max-request-size: 10MB
+  compression:
+    enabled: true
+    server:
+      compression:
+        enabled: true
+        mime-types: text/plain,text/html,application/json,application/xml
+        min-response-size: 1024
+  servlet:
+      session:
+        timeout: 1800
+        cookie:
+          http-only: true
+          secure: true
+          max-age: 3600
+
+# Logging configuration
+logging:
+  level:
+    com.enterprise.inventory: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.transaction: DEBUG
+    com.zaxxer.hikari: DEBUG
+    org.springframework.jdbc: DEBUG
+    root: INFO
+  pattern:
+    com.enterprise.inventory.service: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+  file:
+    max-size: 10MB
+    max-history: 30
+  logback:
+    level: INFO
+    root: INFO
+    spring:
+      datasource: DEBUG
+      hibernate: DEBUG
+      jpa: DEBUG
+
+# Thread pool monitoring
+management:
+  metrics:
+    web:
+      core: true
+    integration:
+      core: true
+    metrics:
+      export:
+        enabled: true
+    tags:
+      threadpool: true
+      system: true
+  endpoint:
+    web:
+      web:
+        threadpool:
+          enabled: true
+        metrics:
+          enabled: true
+        details: true
+        show-details: always
+
+# Circuit breaker configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory-service:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        register-health-indicator: true
+        health-check-path: /actuator/health
+        state:
+          half-open-state: half_open
+          permitted: OPEN
+          closed-state: closed
+          open-state: open
+        metrics:
+          health-check-retries: 3
+          health-check-timeout: 5s
+          health-check-path: /actuator/health
+      order-service:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        register-health-indicator: true
+        health-check-path: /actuator/health
+        state:
+          half-open-state: half_open
+          permitted: OPEN
+          closed-state: closed
+          open-state: open
+        metrics:
+          health-check-retries: 3
+          health-check-timeout: 5s
+          health-check-path: /actuator/health
+      user-service:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        register-health-indicator: true
+        health-check-path: /actuator/health
+        state:
+          half-open-state: half_open
+          permitted: OPEN
+          closed-state: closed
+          open-state: open
+        metrics:
+          health-check-retries: 3
+          health-check-timeout: 5s
+          health-check-path: /actuator/health
+
+# Rate limiting
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: inventory-service
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenish-rate: 100
+                redis-rate-limiter.burst-capacity: 200
+                redis-rate-limiter.requested-tokens: 50
+        - id: order-service
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenish-rate: 50
+                redis-rate-limiter.burst-capacity: 100
+                redis-rate-limiter.requested-tokens: 25
+        - id: user-service
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenish-rate: 30
+                redis-rate-limiter.burst-capacity: 50
+                redis-rate-limiter.requested-tokens: 15
+
+# File upload/download limits
+spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  file:
+    upload:
+      max-file-size: 10MB
+    multipart:
+      max-file-size: 10MB
+
+# Async method configuration
+spring:
+  task:
+    execution:
+      pool:
+        core-size: 2
+        max-size: 5
+        queue-capacity: 100
+        thread-name-prefix: "inventory-async-"
+        rejection-policy: org.springframework.core.task.support.RejectTaskExecutionHandler
+        wait-for-shutdown: true
+        await-termination: true
+        keep-alive: 60
+    scheduling:
+      pool:
+        size: 2
+        thread-name-prefix: "inventory-scheduled-"
+        shutdown:
+          await-termination: true
+          wait-for-tasks-to-complete-on-shutdown: true
+
+# Performance monitoring
+micronometer:
+  metrics:
+  export:
+    prometheus:
+      enabled: true
+    jvm:
+      enabled: true
+    system:
+      cpu: true
+      memory: true
+      threads: true
+      gc: true
+      classloader: true
+  endpoints:
+    web:
+      metrics:
+        enabled: true
+      health:
+        enabled: true
+    tags:
+      threadpool: true
+      system: true
+      metrics:
+        enabled: true

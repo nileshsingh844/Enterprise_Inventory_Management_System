@@ -11,7 +11,7 @@
 
 ---
 
-## 🚀 QUICK FACTS TO MEMORIZE
+## 🎯 QUICK FACTS TO MEMORIZE
 
 ### Project Overview (30-second elevator pitch)
 - **Project**: Enterprise Inventory Management System
@@ -20,7 +20,45 @@
 - **Impact**: 65% reduction in manual data entry
 - **Key Features**: Real-time inventory tracking, automated order processing, JWT authentication
 - **Lines of Code**: 11,000+ lines across 67 files
-- **Services**: Eureka (8761), Gateway (8080), Config (8888), Inventory (8081), Orders (8082), Users (8083)
+- **Services**: Eureka (8761), API Gateway (8080), Config Server (8888), Inventory (8081), Orders (8082), Users (8083)
+- **Database**: 3 separate MySQL databases (inventory_db, order_db, user_db)
+- **Test Coverage**: 95% with JUnit 5 and Mockito
+- **Docker**: Complete containerization with Docker Compose
+
+### Enhanced Features (NEW)
+- **Multithreading**: 4 optimized thread pools for different operation types
+- **Connection Pooling**: HikariCP with MySQL optimizations
+- **File Processing**: Asynchronous CSV/JSON import/export operations
+- **Bulk Operations**: Parallel stock updates and batch processing
+- **Performance**: Optimized for high-concurrency scenarios
+
+### Thread Pool Configuration:
+- **General Purpose**: Core pool (2 threads, max 5, queue 100)
+- **File Processing**: I/O operations (4 threads, max 8, queue 50)
+- **Notifications**: Non-critical operations (3 threads, max 6, queue 100)
+- **Scheduled Tasks**: Periodic maintenance (2 threads, max 4, queue 25)
+
+### Database Connection Pool:
+- **Minimum Idle**: 5 connections always available
+- **Maximum Pool Size**: 20 connections maximum
+- **Connection Timeout**: 30 seconds timeout
+- **Idle Timeout**: 10 minutes idle time
+- **Max Lifetime**: 30 minutes connection lifetime
+- **Leak Detection**: Detect and log connection leaks after 1 minute
+
+### Performance Optimizations:
+- **Prepared Statement Caching**: 250 cached prepared statements
+- **Batch Processing**: Batch inserts/updates with size 20
+- **Lazy Loading**: JPA lazy loading for relationships
+- **Query Caching**: First and second-level query caching enabled
+- **Connection Pooling**: HikariCP with MySQL-specific optimizations
+
+### File Processing Capabilities:
+- **CSV Export**: Asynchronous inventory data export
+- **CSV Import**: Bulk product import with validation
+- **JSON Reports**: Detailed inventory reports in JSON format
+- **Data Backup**: Complete inventory data backup with timestamps
+- **Bulk Operations**: Process large datasets without blocking main threads
 
 ### Key Numbers to Remember
 - **6 Microservices** with independent databases
@@ -177,11 +215,19 @@ public interface InventoryServiceClient {
 - **Entity Relationships**: One-to-many between orders and order items
 - **Indexes**: On frequently queried columns (SKU, customer_id, status)
 - **Data Types**: DECIMAL for money, proper VARCHAR lengths, ENUM for status
+- **Connection Pooling**: HikariCP with optimized settings for high performance
 
 **Key Design Decisions:**
 - **Why separate databases?** Data isolation, independent scaling, reduced coupling
 - **Why JPA?** ORM reduces boilerplate, handles relationships, database-agnostic
 - **Why DTOs?** Separate API representation, prevent data leakage, enable evolution
+- **Why HikariCP?** Fastest connection pool, leak detection, MySQL optimizations
+
+**Performance Optimizations:**
+- **Prepared Statement Caching**: 250 cached statements for better performance
+- **Batch Processing**: Batch inserts/updates with size 20 for bulk operations
+- **Connection Pool Tuning**: 5-20 connections with 30-second timeout
+- **Query Optimization**: Proper indexing and query caching enabled
 
 **Sample Schema to Remember:**
 ```sql
@@ -209,8 +255,13 @@ CREATE TABLE products (
 - **Mockito**: Mock dependencies for unit tests
 - **MockMvc**: Test REST endpoints
 - **TestContainers**: Integration testing with real database
+- **Async Testing:**
+  - **CompletableFuture Testing**: Test async method returns
+  - **Thread Pool Testing**: Verify thread pool configurations
+  - **Concurrent Testing**: Test thread-safe operations
+  - **Performance Testing**: Load testing for high concurrency
 
-**Key Testing Examples:**
+**Testing Examples:**
 ```java
 @Test
 void shouldCreateProductWhenValidDataIsProvided() {
@@ -222,6 +273,12 @@ void shouldCreateProductWhenValidDataIsProvided() {
     assertEquals("TEST-001", result.getSku());
     verify(productRepository).save(any(Product.class));
 }
+
+@Test
+void shouldProcessBulkStockUpdateAsync() {
+    CompletableFuture<Integer> result = asyncService.updateMultipleStockQuantities(updates);
+    assertEquals(5, result.get()); // Verify 5 products updated
+}
 ```
 
 ---
@@ -232,7 +289,8 @@ void shouldCreateProductWhenValidDataIsProvided() {
 - **Multi-stage builds**: Optimize image size
 - **Health checks**: Automated service monitoring
 - **Docker Compose**: Complete system orchestration
-- **Environment variables**: Configuration management
+- **Environment Variables**: Configuration management
+- **Volume Persistence**: MySQL data persistence
 
 **Deployment Architecture:**
 - **Container Orchestration**: Docker Compose for development
@@ -240,12 +298,24 @@ void shouldCreateProductWhenValidDataIsProvided() {
 - **Volume Persistence**: MySQL data persistence
 - **Networking**: Custom bridge network
 
+**Performance Monitoring:**
+- **Thread Pool Metrics**: Monitor thread pool utilization
+- **Connection Pool Metrics**: Track database connection usage
+- **Async Operation Metrics**: Monitor async task performance
+- **Circuit Breaker Metrics**: Track service health
+
 **Key Commands to Remember:**
 ```bash
 docker-compose up -d                    # Start all services
 docker-compose logs -f inventory-service  # View logs
 docker-compose ps                        # Check status
 ```
+
+**Configuration Management:**
+- **Spring Profiles**: Environment-specific configurations
+- **Config Server**: Centralized configuration management
+- **Environment Variables**: Runtime configuration
+- **Thread Pool Tuning**: Optimize for production loads
 
 ---
 
@@ -371,6 +441,55 @@ public interface InventoryServiceClient {
 }
 ```
 
+### 6. Async Service with Thread Pool
+```java
+@Service
+public class AsyncInventoryService {
+    @Async("taskExecutor")
+    public CompletableFuture<Integer> updateMultipleStockQuantities(List<StockUpdate> updates) {
+        return CompletableFuture.supplyAsync(() -> {
+            // Process updates in parallel
+            return processUpdates(updates);
+        });
+    }
+}
+```
+
+### 7. Database Connection Pool Configuration
+```java
+@Configuration
+public class DatabaseConfig {
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setMinimumIdle(5);
+        dataSource.setMaximumPoolSize(20);
+        dataSource.setConnectionTimeout(30000);
+        dataSource.setIdleTimeout(600000);
+        dataSource.setMaxLifetime(1800000);
+        return dataSource;
+    }
+}
+```
+
+### 8. Thread Pool Configuration
+```java
+@Configuration
+@EnableAsync
+public class ThreadPoolConfig {
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("Inventory-Async-");
+        return executor;
+    }
+}
+```
+
 ---
 
 ## 🔢 QUICK REFERENCE NUMBERS
@@ -383,6 +502,35 @@ public interface InventoryServiceClient {
 - **Database Tables**: 7
 - **API Endpoints**: 50+
 - **Test Cases**: 100+
+
+### Performance Metrics
+- **API Response Time**: <200ms average
+- **Database Connection Pool**: 5-20 connections
+- **Thread Pool Sizes**: 2-8 threads per pool
+- **Memory Usage**: 512MB per service
+- **Startup Time**: <30 seconds per service
+
+### Configuration Ports
+- **Eureka Server**: 8761
+- **API Gateway**: 8080
+- **Config Server**: 8888
+- **Inventory Service**: 8081
+- **Order Service**: 8082
+- **User Service**: 8083
+- **MySQL**: 3306
+
+### Thread Pool Configuration
+- **General Purpose**: 2 core, 5 max, 100 queue
+- **File Processing**: 4 core, 8 max, 50 queue
+- **Notifications**: 3 core, 6 max, 100 queue
+- **Scheduled Tasks**: 2 core, 4 max, 25 queue
+
+### Database Pool Settings
+- **Minimum Idle**: 5 connections
+- **Maximum Pool Size**: 20 connections
+- **Connection Timeout**: 30 seconds
+- **Idle Timeout**: 10 minutes
+- **Max Lifetime**: 30 minutes
 
 ### Performance Metrics
 - **API Response Time**: <200ms average
@@ -418,11 +566,18 @@ public interface InventoryServiceClient {
 2. "Inventory Service is down. What happens to order processing?"
 3. "Large order with 1000 items is placed. How does the system handle this?"
 4. "Database connection pool is exhausted. What do you do?"
+5. "How do you handle bulk stock updates efficiently?"
+6. "What happens when thread pool queue is full?"
+7. "How do you optimize database performance for high concurrency?"
 
 ### Design Questions
 1. "Design a system to handle 10,000 concurrent users"
 2. "How would you add a new service to this architecture?"
 3. "How would you implement real-time inventory updates?"
+4. "How do you choose thread pool sizes for different operations?"
+5. "What are the trade-offs between connection pooling and performance?"
+6. "How do you monitor async operations in production?"
+7. "How do you handle file processing for large datasets?"
 
 ---
 
@@ -448,7 +603,11 @@ On the left, the Config Server on port 8888 provides centralized configuration f
 
 At the bottom, each service has its own MySQL database: inventory_db, order_db, and user_db. This separation ensures data isolation and allows independent scaling.
 
-Services communicate via REST APIs using Feign clients. For example, when creating an order, the Order Service calls the Inventory Service to check stock availability and update quantities."
+Services communicate via REST APIs using Feign clients. For example, when creating an order, the Order Service calls the Inventory Service to check stock availability and update quantities.
+
+For performance optimization, I implemented multiple thread pools: a general-purpose pool for async operations, a file processing pool for I/O operations, a notification pool for non-critical tasks, and a scheduled task pool for periodic maintenance.
+
+The database uses HikariCP connection pooling with 5-20 connections, prepared statement caching, and batch processing for high-performance operations."
 
 ### 3. Technical Challenge Script
 "One of the biggest challenges I faced was handling distributed transactions across services. For example, when creating an order, we need to check inventory availability and reserve stock.
@@ -457,7 +616,11 @@ I implemented this using the saga pattern. The Order Service first validates the
 
 I also implemented a circuit breaker pattern using Spring Cloud CircuitBreaker. If the Inventory Service is down, the circuit breaker opens and returns a fallback response, preventing cascading failures.
 
-For concurrency, I used optimistic locking with @Version annotation to handle simultaneous updates. This prevents lost updates and ensures data consistency."
+For concurrency, I used optimistic locking with @Version annotation to handle simultaneous updates. This prevents lost updates and ensures data consistency.
+
+For performance optimization, I implemented multithreading with separate thread pools. Bulk stock updates are processed in parallel using a dedicated thread pool, file operations use an I/O-optimized pool, and notifications use a non-blocking pool to avoid impacting main business operations.
+
+The database connection pool is tuned with HikariCP, using 5-20 connections with proper timeout settings and leak detection. I also implemented prepared statement caching and batch processing for high-volume operations."
 
 ---
 
@@ -470,6 +633,10 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - Docker containerized
 - 11,000+ lines of code
 - 95% test coverage
+- Multithreading with 4 thread pools
+- HikariCP connection pooling
+- Async file processing
+- Bulk operations support
 
 ### Key Technologies
 - Java 11+, Spring Boot 2.7.14
@@ -477,6 +644,8 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - MySQL 8.0, Hibernate
 - JWT, Maven, JUnit 5
 - Docker, Docker Compose
+- HikariCP, Thread Pools
+- CompletableFuture, Async Processing
 
 ### Ports to Remember
 - Gateway: 8080
@@ -485,6 +654,13 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - Inventory: 8081
 - Orders: 8082
 - Users: 8083
+
+### Performance Numbers
+- Thread Pools: 2-8 threads per pool
+- DB Connections: 5-20 connections
+- Response Time: <200ms
+- Test Coverage: 95%
+- Start Time: <30s per service
 
 ---
 
@@ -496,7 +672,10 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - [ ] Memorize key numbers and facts
 - [ ] Practice explaining technical challenges
 - [ ] Review code examples
-- [ ] Prepare scenario-based answers
+- [ ] Practice multithreading concepts
+- [ ] Review connection pooling details
+- [ ] Practice async operation examples
+- [ ] Prepare file processing scenarios
 
 ### During Interview
 - [ ] Start with high-level overview
@@ -505,6 +684,9 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - [ ] Provide specific examples from project
 - [ ] Discuss challenges and solutions
 - [ ] Show enthusiasm and passion
+- [ ] Explain multithreading benefits
+- [ ] Discuss performance optimizations
+- [ ] Talk about connection pooling strategy
 
 ### Key Phrases to Use
 - "I implemented..."
@@ -512,6 +694,11 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - "The main challenge was..."
 - "I solved this by..."
 - "The trade-off was..."
+- "For performance, I implemented..."
+- "I used multithreading to..."
+- "Connection pooling helped optimize..."
+- "Async processing improved..."
+- "The system handles high concurrency through..."
 - "In production, I would..."
 
 ---
@@ -555,6 +742,10 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - **65% reduction in manual work**
 - **95% test coverage**
 - **Ports: 8761, 8888, 8080, 8081, 8082, 8083**
+- **Thread Pools: 4 different pools (2-8 threads each)**
+- **DB Connections: 5-20 connections with HikariCP**
+- **Response Time: <200ms average**
+- **Batch Size: 20 for bulk operations**
 
 ### Must-Know Concepts
 - Microservices architecture
@@ -564,5 +755,19 @@ For concurrency, I used optimistic locking with @Version annotation to handle si
 - Distributed transactions
 - Docker containerization
 - Spring Boot auto-configuration
+- Multithreading with @Async
+- Connection pooling with HikariCP
+- CompletableFuture for async operations
+- Thread pool optimization
+- Database performance tuning
+- File processing with dedicated pools
+
+### Performance Talking Points
+- "I implemented 4 optimized thread pools for different operation types"
+- "Used HikariCP with 5-20 connections and MySQL optimizations"
+- "Async processing prevents blocking main business operations"
+- "Bulk operations use parallel processing for better performance"
+- "Connection leak detection prevents resource exhaustion"
+- "Prepared statement caching reduces database overhead"
 
 **You've got this! Your Enterprise Inventory Management System is impressive and you're well-prepared! 🎯**
