@@ -1,0 +1,93 @@
+# Inventory Service Configuration
+# This configuration file contains settings specific to the Inventory Service microservice
+
+server:
+  port: 8081  # Port on which Inventory Service will run
+
+spring:
+  application:
+    name: inventory-service  # Service name for identification and service discovery
+  
+  # Database configuration for Inventory Service
+  datasource:
+    # JDBC URL for MySQL database connection
+    url: jdbc:mysql://localhost:3306/inventory_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    # Database username
+    username: inventory_user
+    # Database password
+    password: inventory_pass
+    # JDBC driver class name
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    
+  # JPA/Hibernate configuration
+  jpa:
+    # Database platform dialect
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    # Automatically create/update database schema
+    hibernate:
+      ddl-auto: update
+    # Show SQL statements in logs for debugging
+    show-sql: true
+    # Format SQL statements for better readability
+    properties:
+      hibernate:
+        format_sql: true
+    # Database initialization mode
+    defer-datasource-initialization: true
+
+# Eureka Client configuration for service discovery
+eureka:
+  client:
+    service-url:
+      # URL of the Eureka server for registration and discovery
+      defaultZone: http://localhost:8761/eureka/
+    # Register this service with Eureka
+    register-with-eureka: true
+    # Fetch registry from Eureka to discover other services
+    fetch-registry: true
+    # Interval between heartbeats to Eureka server (in seconds)
+    registry-fetch-interval-seconds: 30
+  instance:
+    # Hostname where this instance is running
+    hostname: localhost
+    # Prefer IP address for service registration
+    prefer-ip-address: true
+    # Lease renewal interval (how often to send heartbeats, in seconds)
+    lease-renewal-interval-in-seconds: 30
+    # Lease expiration duration (how long to wait before removing instance, in seconds)
+    lease-expiration-duration-in-seconds: 90
+
+# Management endpoint configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose health and info endpoints for monitoring
+        include: health,info,metrics
+  endpoint:
+    health:
+      # Show detailed health information
+      show-details: always
+
+# Application-specific configuration
+app:
+  inventory:
+    # Configuration for inventory management
+    low-stock-threshold: 10  # Alert when stock falls below this quantity
+    reorder-quantity: 100    # Default quantity to reorder when stock is low
+    # Cache configuration for frequently accessed inventory data
+    cache:
+      ttl: 300  # Cache time-to-live in seconds (5 minutes)
+      max-size: 1000  # Maximum number of items in cache
+
+# Logging configuration
+logging:
+  level:
+    # Set logging level for application packages
+    com.enterprise.inventory: DEBUG
+    # Hibernate SQL logging
+    org.hibernate.SQL: DEBUG
+    # Hibernate parameter binding logging
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    # Root logging level
+    root: INFO

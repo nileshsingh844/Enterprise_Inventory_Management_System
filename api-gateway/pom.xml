@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+API Gateway Maven POM configuration
+API Gateway provides single entry point for all client requests and routes them to appropriate microservices
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    
+    <!-- Parent project reference - inherits configuration from root POM -->
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.enterprise.inventory</groupId>
+        <artifactId>inventory-management-system</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    
+    <!-- Module specific coordinates -->
+    <artifactId>api-gateway</artifactId>
+    <name>API Gateway</name>
+    <description>API Gateway for routing and cross-cutting concerns</description>
+    
+    <!-- API Gateway specific dependencies -->
+    <dependencies>
+        <!-- Spring Cloud Gateway - provides API gateway functionality with routing, filtering, and security -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+        
+        <!-- Spring Cloud Starter Eureka Client - enables service discovery and registration -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Starter Actuator - provides monitoring and management endpoints -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        
+        <!-- Spring Cloud Starter CircuitBreaker - provides circuit breaker pattern implementation -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Starter Test - provides testing framework -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <!-- Spring WebFlux Test - provides testing support for reactive web applications -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <!-- Reactor Test - provides testing utilities for reactive programming -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    
+    <!-- Build configuration for API Gateway -->
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin - creates executable JAR -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Main class for Spring Boot application -->
+                    <mainClass>com.enterprise.inventory.gateway.GatewayApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+Eureka Server Maven POM configuration
+Eureka Server provides service discovery and registration for microservices architecture
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    
+    <!-- Parent project reference - inherits configuration from root POM -->
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.enterprise.inventory</groupId>
+        <artifactId>inventory-management-system</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    
+    <!-- Module specific coordinates -->
+    <artifactId>eureka-server</artifactId>
+    <name>Eureka Server</name>
+    <description>Service Discovery and Registration Server</description>
+    
+    <!-- Eureka Server specific dependencies -->
+    <dependencies>
+        <!-- Spring Boot Starter Web - provides embedded Tomcat server and web MVC framework -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        
+        <!-- Spring Cloud Starter Eureka Server - enables Eureka server functionality -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Starter Test - provides testing framework with JUnit 5 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <!-- Spring Boot DevTools - provides automatic restart and live reload during development -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+    
+    <!-- Build configuration for Eureka Server -->
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin - creates executable JAR with embedded server -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Main class for Spring Boot application -->
+                    <mainClass>com.enterprise.inventory.eureka.EurekaServerApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

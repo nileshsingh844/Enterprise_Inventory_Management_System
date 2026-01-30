@@ -1,0 +1,85 @@
+# Config Server Configuration
+# This YAML file configures the Spring Cloud Config Server
+
+server:
+  port: 8888  # Port on which Config Server will run (standard config server port)
+
+spring:
+  application:
+    name: config-server  # Application name for identification in the ecosystem
+  
+  # Cloud Config Server configuration
+  cloud:
+    config:
+      server:
+        # Git repository configuration for storing configuration files
+        git:
+          # URI of the Git repository containing configuration files
+          # For production, use a proper Git repository (GitHub, GitLab, etc.)
+          uri: https://github.com/enterprise-inventory/config-repo
+          # Default branch to use for configuration files
+          default-label: main
+          # Search paths within the Git repository for configuration files
+          search-paths: config
+          # Username for private repository (remove for public repos)
+          username: 
+          # Password for private repository (remove for public repos)
+          password: 
+          # Clone on startup to ensure repository is available
+          clone-on-start: true
+          # Force pull to get latest configuration
+          force-pull: true
+          # Timeout for Git operations (in seconds)
+          timeout: 10
+
+# Eureka Client configuration for service discovery
+eureka:
+  client:
+    service-url:
+      # URL of the Eureka server for registration and discovery
+      defaultZone: http://localhost:8761/eureka/
+    # Register this config server with Eureka
+    register-with-eureka: true
+    # Fetch registry from Eureka to discover other services
+    fetch-registry: true
+  instance:
+    # Hostname where this instance is running
+    hostname: localhost
+    # Prefer IP address for service registration
+    prefer-ip-address: true
+
+# Management endpoint configuration for monitoring and health checks
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose all management endpoints for monitoring
+        include: "*"
+  endpoint:
+    health:
+      # Show detailed health information
+      show-details: always
+  # Enable health checks for service discovery
+  health:
+    config:
+      enabled: true
+
+# Security configuration (basic authentication for config server)
+spring:
+  security:
+    user:
+      # Username for accessing config server endpoints
+      name: config-admin
+      # Password for accessing config server endpoints
+      password: config-secret
+      # Role for the user
+      roles: CONFIG_ADMIN
+
+# Logging configuration
+logging:
+  level:
+    # Set logging level for config server packages
+    org.springframework.cloud.config: DEBUG
+    org.springframework.security: DEBUG
+    # Root logging level
+    root: INFO

@@ -1,0 +1,378 @@
+# Docker Compose configuration for Enterprise Inventory Management System
+# This file defines and orchestrates all microservices and supporting infrastructure
+# Each service runs in its own container with proper networking and volume management
+
+version: '3.8'  # Docker Compose version specification
+
+# Network configuration for inter-service communication
+networks:
+  inventory-network:
+    driver: bridge  # Use bridge network for container communication
+
+# Volume configuration for data persistence
+volumes:
+  mysql-data:
+    driver: local  # Local volume for MySQL data persistence
+
+services:
+  # MySQL Database Service
+  # Central database for all microservices with separate schemas
+  mysql:
+    image: mysql:8.0  # Official MySQL 8.0 image
+    container_name: mysql-db
+    restart: unless-stopped  # Restart policy
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword123  # Root password for MySQL
+      MYSQL_DATABASE: inventory_management  # Default database
+    ports:
+      - "3306:3306"  # Map MySQL port to host
+    volumes:
+      - mysql-data:/var/lib/mysql  # Persist MySQL data
+      - ./database-setup.sql:/docker-entrypoint-initdb.d/init.sql  # Initialize database schema
+    networks:
+      - inventory-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]  # Health check command
+      interval: 30s  # Check interval
+      timeout: 10s   # Timeout for health check
+      retries: 3     # Number of retries
+      start_period: 40s  # Wait period before first check
+
+  # Eureka Server - Service Discovery
+  # Central registry for all microservices
+  eureka-server:
+    build:
+      context: ./eureka-server  # Build from local Dockerfile
+      dockerfile: Dockerfile
+    container_name: eureka-server
+    restart: unless-stopped
+    ports:
+      - "8761:8761"  # Eureka server port
+    environment:
+      SPRING_PROFILES_ACTIVE: docker  # Use Docker-specific configuration
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: false  # Don't register with itself
+      EUREKA_CLIENT_FETCH_REGISTRY: false  # Don't fetch registry
+    networks:
+      - inventory-network
+    depends_on:
+      mysql:
+        condition: service_healthy  # Wait for MySQL to be healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]  # Health check
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Config Server - Centralized Configuration
+  # Provides configuration management for all microservices
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: Dockerfile
+    container_name: config-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"  # Config server port
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_CONFIG_SERVER_GIT_URI: https://github.com/enterprise-inventory/config-repo  # Git repository for config
+    networks:
+      - inventory-network
+    depends_on:
+      eureka-server:
+        condition: service_healthy  # Wait for Eureka to be healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # API Gateway - Single Entry Point
+  # Routes all external requests to appropriate microservices
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # API Gateway port (main application entry point)
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka-server:8761/eureka  # Eureka server URL
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888  # Config server URL
+    networks:
+      - inventory-network
+    depends_on:
+      config-server:
+        condition: service_healthy  # Wait for Config Server to be healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Inventory Service - Product and Stock Management
+  # Handles inventory operations, stock tracking, and product management
+  inventory-service:
+    build:
+      context: ./inventory-service
+      dockerfile: Dockerfile
+    container_name: inventory-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"  # Inventory service port
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/inventory_db?useSSL=false&serverTimezone=UTC  # Database URL
+      SPRING_DATASOURCE_USERNAME: inventory_user  # Database username
+      SPRING_DATASOURCE_PASSWORD: inventory_pass   # Database password
+    networks:
+      - inventory-network
+    depends_on:
+      api-gateway:
+        condition: service_healthy  # Wait for API Gateway to be healthy
+      mysql:
+        condition: service_healthy   # Wait for MySQL to be healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Order Service - Order Processing and Management
+  # Handles order creation, processing, and workflow automation
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"  # Order service port
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: order_user
+      SPRING_DATASOURCE_PASSWORD: order_pass
+      INVENTORY_SERVICE_URL: http://inventory-service:8081  # Inventory service URL for Feign client
+    networks:
+      - inventory-network
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy  # Wait for Inventory Service to be healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # User Service - Authentication and Authorization
+  # Handles user management, authentication, and JWT token generation
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"  # User service port
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/user_db?useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: user_user
+      SPRING_DATASOURCE_PASSWORD: user_pass
+      APP_JWT_SECRET: mySecretKey123456789012345678901234567890123456789012345678901234567890  # JWT secret key
+      APP_JWT_EXPIRATION: 86400000  # JWT expiration time (24 hours)
+      APP_JWT_REFRESH_EXPIRATION: 604800000  # Refresh token expiration (7 days)
+    networks:
+      - inventory-network
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Reverse Proxy (Optional)
+  # Provides load balancing and SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"    # HTTP port
+      - "443:443"  # HTTPS port (for SSL)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf  # Nginx configuration
+      - ./nginx/ssl:/etc/nginx/ssl              # SSL certificates (if any)
+    networks:
+      - inventory-network
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Prometheus - Monitoring and Metrics Collection
+  # Collects metrics from all microservices for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"  # Prometheus UI port
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml  # Prometheus configuration
+      - prometheus-data:/prometheus  # Persist Prometheus data
+    networks:
+      - inventory-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - api-gateway
+      - inventory-service
+      - order-service
+      - user-service
+
+  # Grafana - Visualization Dashboard
+  # Provides visualization for metrics collected by Prometheus
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Grafana UI port
+    environment:
+      GF_SECURITY_ADMIN_USER: admin  # Grafana admin username
+      GF_SECURITY_ADMIN_PASSWORD: admin123  # Grafana admin password
+    volumes:
+      - grafana-data:/var/lib/grafana  # Persist Grafana data
+      - ./grafana/provisioning:/etc/grafana/provisioning  # Grafana provisioning
+    networks:
+      - inventory-network
+    depends_on:
+      - prometheus
+
+# Additional volumes for data persistence
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# =================================================================
+# USAGE INSTRUCTIONS
+# =================================================================
+
+# To start all services:
+# docker-compose up -d
+
+# To start specific services:
+# docker-compose up -d mysql eureka-server config-server
+
+# To view logs:
+# docker-compose logs -f [service-name]
+
+# To stop all services:
+# docker-compose down
+
+# To stop and remove volumes:
+# docker-compose down -v
+
+# To rebuild and restart:
+# docker-compose up -d --build
+
+# Health check status:
+# docker-compose ps
+
+# Access points:
+# - API Gateway: http://localhost:8080
+# - Eureka Dashboard: http://localhost:8761
+# - Config Server: http://localhost:8888
+# - Inventory Service: http://localhost:8081
+# - Order Service: http://localhost:8082
+# - User Service: http://localhost:8083
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3000 (admin/admin123)
+# - MySQL: localhost:3306 (root/rootpassword123)
+
+# =================================================================
+# DEVELOPMENT NOTES
+# =================================================================
+
+# 1. Service Dependencies:
+#    - All services depend on MySQL for database
+#    - Services depend on Eureka for service discovery
+#    - Services depend on Config Server for configuration
+#    - Order Service depends on Inventory Service for Feign client
+
+# 2. Health Checks:
+#    - All services have health checks implemented
+#    - Services wait for dependencies to be healthy before starting
+#    - Health checks ensure proper service startup order
+
+# 3. Networking:
+#    - All services communicate through the inventory-network
+#    - Services use container names for inter-service communication
+#    - External access is provided through port mapping
+
+# 4. Data Persistence:
+#    - MySQL data is persisted in mysql-data volume
+#    - Prometheus and Grafana data are also persisted
+#    - Application data is stored in MySQL databases
+
+# 5. Monitoring:
+#    - Prometheus collects metrics from all services
+#    - Grafana provides visualization dashboards
+#    - Health checks provide service status information
+
+# 6. Configuration:
+#    - Environment variables override application properties
+#    - Docker-specific profiles are used for container configuration
+#    - Configuration is centralized through Config Server
+
+# 7. Security:
+#    - JWT secrets are provided through environment variables
+#    - Database credentials are configured through environment variables
+#    - Consider using Docker secrets for production deployments
+
+# 8. Scaling:
+#    - Services can be scaled using docker-compose scale
+#    - Load balancing is handled by Nginx and Eureka
+#    - Database scaling would require additional configuration

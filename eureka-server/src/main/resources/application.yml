@@ -1,0 +1,57 @@
+# Eureka Server Configuration
+# This YAML file configures the Eureka service discovery server
+
+server:
+  port: 8761  # Port on which Eureka server will run (standard Eureka port)
+
+spring:
+  application:
+    name: eureka-server  # Application name for identification in the ecosystem
+
+eureka:
+  instance:
+    hostname: localhost  # Hostname where Eureka server is running
+    # Register Eureka server itself as a service (important for Eureka cluster setups)
+    register-with-eureka: false  
+    # Don't fetch registry from other Eureka servers (standalone mode)
+    fetch-registry: false
+    # Health check URL for monitoring Eureka server health
+    health-check-url-path: /actuator/health
+    
+  server:
+    # Enable self-preservation mode (prevents Eureka from removing instances during network issues)
+    enable-self-preservation: true
+    # Wait time before removing a service instance from registry (in milliseconds)
+    eviction-interval-timer-in-ms: 5000
+    # Threshold for self-preservation mode (percentage of renewals expected)
+    renewal-percent-threshold: 0.85
+    
+  client:
+    # Don't register this server with itself (standalone mode)
+    register-with-eureka: false
+    # Don't fetch registry from other servers
+    fetch-registry: false
+    # URL of the Eureka server (itself in this case)
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+# Management endpoint configuration for health checks and monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose health endpoint for monitoring
+        include: health
+  endpoint:
+    health:
+      # Show detailed health information
+      show-details: always
+
+# Logging configuration
+logging:
+  level:
+    # Set logging level for Eureka packages
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+    # Root logging level
+    root: INFO

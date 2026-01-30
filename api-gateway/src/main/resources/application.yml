@@ -1,0 +1,113 @@
+# API Gateway Configuration
+# This YAML file configures the Spring Cloud Gateway for routing requests to microservices
+
+server:
+  port: 8080  # Port on which API Gateway will run (standard HTTP port)
+
+spring:
+  application:
+    name: api-gateway  # Application name for identification in the ecosystem
+  
+  # Cloud Gateway configuration for routing and filtering
+  cloud:
+    gateway:
+      # Route definitions - each route defines how to match and forward requests
+      routes:
+        # Route for Inventory Service
+        - id: inventory-service  # Unique identifier for this route
+          uri: lb://inventory-service  # Load balancer URI - 'lb://' means use service discovery
+          predicates:
+            - Path=/api/inventory/**  # Route requests matching this path pattern
+          filters:
+            - StripPrefix=2  # Remove first 2 path segments before forwarding
+            
+        # Route for Order Service
+        - id: order-service  # Unique identifier for this route
+          uri: lb://order-service  # Load balancer URI for order service
+          predicates:
+            - Path=/api/orders/**  # Route requests matching this path pattern
+          filters:
+            - StripPrefix=2  # Remove first 2 path segments before forwarding
+            
+        # Route for User Service
+        - id: user-service  # Unique identifier for this route
+          uri: lb://user-service  # Load balancer URI for user service
+          predicates:
+            - Path=/api/users/**  # Route requests matching this path pattern
+          filters:
+            - StripPrefix=2  # Remove first 2 path segments before forwarding
+            
+        # Route for Eureka Server (for monitoring)
+        - id: eureka-server  # Unique identifier for this route
+          uri: http://localhost:8761  # Direct URI to Eureka server
+          predicates:
+            - Path=/eureka/**  # Route requests matching this path pattern
+      
+      # Global CORS configuration for cross-origin requests
+      globalcors:
+        cors-configurations:
+          '[/**]':  # Apply to all paths
+            allowedOrigins: "*"  # Allow requests from any origin (configure appropriately for production)
+            allowedMethods: "*"  # Allow all HTTP methods
+            allowedHeaders: "*"  # Allow all headers
+            allowCredentials: true  # Allow credentials in requests
+
+# Eureka Client configuration for service discovery
+eureka:
+  client:
+    service-url:
+      # URL of the Eureka server for registration and discovery
+      defaultZone: http://localhost:8761/eureka/
+    # Register this gateway with Eureka
+    register-with-eureka: true
+    # Fetch registry from Eureka to discover other services
+    fetch-registry: true
+  instance:
+    # Hostname where this instance is running
+    hostname: localhost
+    # Prefer IP address for service registration
+    prefer-ip-address: true
+
+# Management endpoint configuration for monitoring and health checks
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose all management endpoints for monitoring
+        include: "*"
+  endpoint:
+    health:
+      # Show detailed health information
+      show-details: always
+  # Enable health checks for service discovery
+  health:
+    circuitbreakers:
+      enabled: true
+
+# Circuit Breaker configuration for fault tolerance
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Circuit breaker configuration for inventory service
+      inventory-service:
+        # Register circuit breaker in the circuit breaker registry
+        registerHealthIndicator: true
+        # Number of calls before calculating failure rate
+        slidingWindowSize: 10
+        # Failure rate threshold to open circuit (50%)
+        failureRateThreshold: 50
+        # Wait duration before transitioning to half-open state (30 seconds)
+        waitDurationInOpenState: 30s
+        # Minimum number of calls before circuit breaker can calculate error rate
+        minimumNumberOfCalls: 5
+        # Automatic transition from open to half-open
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+# Logging configuration
+logging:
+  level:
+    # Set logging level for gateway packages
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.web.reactive: DEBUG
+    # Root logging level
+    root: INFO
