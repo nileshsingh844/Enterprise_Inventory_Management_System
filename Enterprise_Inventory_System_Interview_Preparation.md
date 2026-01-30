@@ -10,7 +10,11 @@
 7. [Testing Questions](#testing-questions)
 8. [Docker & DevOps Questions](#docker--devops-questions)
 9. [Performance & Scalability Questions](#performance--scalability-questions)
-10. [Scenario-Based Questions](#scenario-based-questions)
+10. [Multithreading & Concurrency Questions](#multithreading--concurrency-questions)
+11. [Connection Pooling & Database Performance Questions](#connection-pooling--database-performance-questions)
+12. [Async Processing & File Operations Questions](#async-processing--file-operations-questions)
+13. [Scenario-Based Questions](#scenario-based-questions)
+14. [Advanced Technical Questions](#advanced-technical-questions)
 
 ---
 
@@ -633,6 +637,569 @@ public void createOrder(OrderDto orderDto) {
 
 ---
 
+## Multithreading & Concurrency Questions
+
+### Q25. How did you implement multithreading in the Inventory Management System?
+
+**Answer:** I implemented comprehensive multithreading using Spring's @Async annotation with custom thread pools:
+
+**Thread Pool Configuration:**
+- **General Purpose Pool**: 2 core threads, 5 max threads, 100 queue capacity
+- **File Processing Pool**: 4 core threads, 8 max threads, 50 queue capacity (I/O optimized)
+- **Notification Pool**: 3 core threads, 6 max threads, 100 queue capacity (non-blocking)
+- **Scheduled Tasks Pool**: 2 core threads, 4 max threads, 25 queue capacity (maintenance)
+
+**Implementation Details:**
+```java
+@Configuration
+@EnableAsync
+public class ThreadPoolConfig {
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("Inventory-Async-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        return executor;
+    }
+}
+```
+
+**Async Service Example:**
+```java
+@Async("taskExecutor")
+public CompletableFuture<Integer> updateMultipleStockQuantities(List<StockUpdate> updates) {
+    return CompletableFuture.supplyAsync(() -> {
+        // Process updates in parallel
+        return processUpdates(updates);
+    });
+}
+```
+
+**Cross-Questions:**
+- **Q:** Why did you choose different thread pools for different operations?
+  **A:** Different operations have different characteristics - I/O operations benefit from more threads, while CPU-bound tasks need fewer threads to avoid context switching overhead.
+
+- **Q:** How do you handle thread pool exhaustion?
+  **A:** Using CallerRunsPolicy rejection handler, which runs the task in the calling thread, providing backpressure and preventing task loss.
+
+- **Q:** How do you monitor thread pool performance?
+  **A:** Through Spring Actuator metrics, custom logging, and monitoring queue sizes, active threads, and task completion times.
+
+### Q26. What are the benefits of using CompletableFuture in your system?
+
+**Answer:** CompletableFuture provides several key benefits:
+
+**Non-blocking Operations:**
+```java
+public CompletableFuture<InventoryReport> generateInventoryReport() {
+    return CompletableFuture.supplyAsync(() -> {
+        // Heavy report generation logic
+        return createReport();
+    }, taskExecutor);
+}
+```
+
+**Composition and Chaining:**
+```java
+CompletableFuture<String> result = CompletableFuture
+    .supplyAsync(() -> fetchData())
+    .thenApply(data -> processData(data))
+    .thenCompose(processed -> saveToDatabase(processed))
+    .exceptionally(ex -> handleError(ex));
+```
+
+**Parallel Processing:**
+```java
+CompletableFuture<Void> allUpdates = CompletableFuture.allOf(
+    updateStock(update1),
+    updateStock(update2),
+    updateStock(update3)
+);
+```
+
+**Cross-Questions:**
+- **Q:** How does CompletableFuture differ from Future?
+  **A:** CompletableFuture allows chaining, composition, and non-blocking completion handling, while Future requires blocking get() calls.
+
+- **Q:** How do you handle exceptions in CompletableFuture?
+  **A:** Using exceptionally(), handle(), and whenComplete() methods for comprehensive error handling.
+
+- **Q:** What's the difference between supplyAsync and runAsync?
+  **A:** supplyAsync returns a result, runAsync doesn't return a result (void return type).
+
+### Q27. How do you ensure thread safety in your application?
+
+**Answer:** I implement thread safety through multiple strategies:
+
+**Immutable Objects:**
+```java
+@Entity
+public class Product {
+    @Id
+    private final Long productId; // Immutable ID
+    private final String sku;      // Immutable SKU
+    
+    // Thread-safe getters
+    public Long getProductId() { return productId; }
+}
+```
+
+**Thread-safe Collections:**
+```java
+// For concurrent access
+private final ConcurrentHashMap<String, Product> productCache = new ConcurrentHashMap<>();
+private final CopyOnWriteArrayList<String> notifications = new CopyOnWriteArrayList<>();
+```
+
+**Synchronized Methods for Critical Sections:**
+```java
+public synchronized void updateCriticalData(Product product) {
+    // Critical section that must be thread-safe
+    performUpdate(product);
+}
+```
+
+**Atomic Operations:**
+```java
+private final AtomicInteger updateCount = new AtomicInteger(0);
+private final AtomicReference<ProductStatus> status = new AtomicReference<>(ProductStatus.ACTIVE);
+```
+
+**Cross-Questions:**
+- **Q:** When would you use ConcurrentHashMap vs HashMap?
+  **A:** ConcurrentHashMap for concurrent access, HashMap for single-threaded access or external synchronization.
+
+- **Q:** What's the difference between synchronized and ReentrantLock?
+  **A:** ReentrantLock provides more flexibility - tryLock, timeout, interruptible locks, and condition variables.
+
+- **Q:** How do you handle race conditions?
+  **A:** Through proper synchronization, atomic variables, and optimistic locking with @Version annotation.
+
+---
+
+## Connection Pooling & Database Performance Questions
+
+### Q28. How did you optimize database connection pooling in your system?
+
+**Answer:** I implemented HikariCP connection pooling with MySQL-specific optimizations:
+
+**Connection Pool Configuration:**
+```java
+@Configuration
+public class DatabaseConfig {
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        HikariDataSource dataSource = new HikariDataSource();
+        
+        // Core pool settings
+        dataSource.setMinimumIdle(5);           // Always keep 5 connections
+        dataSource.setMaximumPoolSize(20);        // Maximum 20 connections
+        dataSource.setConnectionTimeout(30000);   // 30-second timeout
+        dataSource.setIdleTimeout(600000);        // 10-minute idle timeout
+        dataSource.setMaxLifetime(1800000);        // 30-minute max lifetime
+        
+        // Leak detection
+        dataSource.setLeakDetectionThreshold(60000); // Detect leaks after 1 minute
+        
+        // MySQL optimizations
+        Properties props = new Properties();
+        props.setProperty("cachePrepStmts", "true");
+        props.setProperty("prepStmtCacheSize", "250");
+        props.setProperty("useServerPrepStmts", "true");
+        props.setProperty("rewriteBatchedStatements", "true");
+        dataSource.setDataSourceProperties(props);
+        
+        return dataSource;
+    }
+}
+```
+
+**Performance Optimizations:**
+- **Prepared Statement Caching**: 250 cached prepared statements
+- **Batch Processing**: Batch inserts/updates with size 20
+- **Connection Validation**: Automatic connection health checks
+- **Leak Detection**: Detect and log connection leaks
+
+**Cross-Questions:**
+- **Q:** Why did you choose HikariCP over other connection pools?
+  **A:** HikariCP is the fastest, has minimal overhead, excellent leak detection, and reliable connection validation.
+
+- **Q:** How do you determine optimal pool size?
+  **A:** Based on database capacity, application concurrency, and monitoring metrics. Start with CPU cores × 2 + 1 and tune based on performance.
+
+- **Q:** What happens when the connection pool is exhausted?
+  **A:** New requests wait for connection timeout (30s), then fail with SQL exception. Monitor pool metrics to prevent exhaustion.
+
+### Q29. How do you optimize database performance for high concurrency?
+
+**Answer:** I implement multiple optimization strategies:
+
+**Query Optimization:**
+```java
+// Use proper indexing
+@Table(name = "products")
+@Index(name = "idx_sku", columnList = "sku")
+@Index(name = "idx_category", columnList = "category")
+public class Product {
+    // Entity fields
+}
+
+// Optimized queries
+@Query("SELECT p FROM Product p WHERE p.category = :category AND p.quantityInStock <= :reorderLevel")
+List<Product> findLowStockByCategory(@Param("category") String category, @Param("reorderLevel") int reorderLevel);
+```
+
+**Batch Processing:**
+```java
+@Service
+@Transactional
+public class BulkUpdateService {
+    @Transactional
+    public void bulkUpdateProducts(List<Product> products) {
+        // Use batch processing for better performance
+        for (int i = 0; i < products.size(); i += 20) {
+            List<Product> batch = products.subList(i, Math.min(i + 20, products.size()));
+            productRepository.saveAll(batch);
+        }
+    }
+}
+```
+
+**Caching Strategy:**
+```java
+@Cacheable(value = "products", key = "#sku")
+public Product getProductBySku(String sku) {
+    return productRepository.findBySku(sku);
+}
+
+@CacheEvict(value = "products", key = "#product.sku")
+public Product updateProduct(Product product) {
+    return productRepository.save(product);
+}
+```
+
+**Cross-Questions:**
+- **Q:** How do you handle N+1 query problems?
+  **A:** Using JOIN FETCH in JPQL queries, @EntityGraph, or batch fetching with @BatchSize.
+
+- **Q:** What's the impact of connection pooling on performance?
+  **A:** Reduces connection overhead, improves response time, but too many connections can overwhelm the database.
+
+- **Q:** How do you monitor database performance?
+  **A:** Through HikariCP metrics, slow query logging, and application performance monitoring tools.
+
+### Q30. How do you handle database transactions in a multithreaded environment?
+
+**Answer:** I implement proper transaction management for concurrent access:
+
+**Transaction Isolation:**
+```java
+@Service
+@Transactional(isolation = Isolation.READ_COMMITTED)
+public class TransactionalService {
+    
+    @Transactional(readOnly = true)
+    public Product getProduct(Long id) {
+        return productRepository.findById(id).orElse(null);
+    }
+    
+    @Transactional
+    public Product updateProduct(Product product) {
+        // Optimistic locking with version
+        Product existing = productRepository.findById(product.getProductId())
+                .orElseThrow(() -> new EntityNotFoundException());
+        
+        if (existing.getVersion() != product.getVersion()) {
+            throw new OptimisticLockingFailureException("Product was modified by another transaction");
+        }
+        
+        return productRepository.save(product);
+    }
+}
+```
+
+**Distributed Transaction Handling:**
+```java
+@Service
+public class SagaTransactionService {
+    @Transactional
+    public void createOrder(Order order) {
+        try {
+            // Step 1: Create order
+            orderRepository.save(order);
+            
+            // Step 2: Reserve inventory (via Feign)
+            inventoryService.reserveStock(order.getOrderItems());
+            
+            // Step 3: Process payment
+            paymentService.processPayment(order);
+            
+        } catch (Exception e) {
+            // Compensating transactions
+            inventoryService.releaseStock(order.getOrderItems());
+            throw e;
+        }
+    }
+}
+```
+
+**Cross-Questions:**
+- **Q:** What transaction isolation level do you use and why?
+  **A:** READ_COMMITTED for most operations - balances consistency and performance. SERIALIZABLE only when absolutely necessary.
+
+- **Q:** How do you handle deadlocks?
+  **A:** Through proper transaction ordering, timeout settings, and retry mechanisms with exponential backoff.
+
+- **Q:** What's the difference between @Transactional and programmatic transaction management?
+  **A:** @Transactional is declarative and simpler, programmatic gives more control but is more complex to manage.
+
+---
+
+## Async Processing & File Operations Questions
+
+### Q31. How do you handle file processing in your system?
+
+**Answer:** I implemented asynchronous file processing with dedicated thread pools:
+
+**File Processing Service:**
+```java
+@Service
+public class FileProcessingService {
+    
+    @Async("fileProcessingExecutor")
+    public CompletableFuture<String> exportInventoryToCsv(String filePath) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Product> products = productRepository.findAll();
+                
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+                    writer.write("Product ID,SKU,Name,Price,Quantity\n");
+                    
+                    for (Product product : products) {
+                        writer.write(String.format("%d,%s,%s,%.2f,%d\n",
+                            product.getProductId(),
+                            product.getSku(),
+                            product.getName(),
+                            product.getUnitPrice(),
+                            product.getQuantityInStock()));
+                    }
+                }
+                
+                return filePath;
+            } catch (IOException e) {
+                throw new RuntimeException("File export failed", e);
+            }
+        });
+    }
+}
+```
+
+**CSV Import with Validation:**
+```java
+@Async("fileProcessingExecutor")
+public CompletableFuture<FileImportResult> importProductsFromCsv(String filePath) {
+    return CompletableFuture.supplyAsync(() -> {
+        FileImportResult result = new FileImportResult();
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            int lineNumber = 0;
+            
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                
+                try {
+                    ProductDto product = parseCsvLine(line);
+                    if (isValidProduct(product)) {
+                        // Process product
+                        processProduct(product);
+                        result.incrementSuccess();
+                    } else {
+                        result.addFailure(lineNumber, "Invalid data");
+                    }
+                } catch (Exception e) {
+                    result.addFailure(lineNumber, e.getMessage());
+                }
+            }
+        }
+        
+        return result;
+    });
+}
+```
+
+**Cross-Questions:**
+- **Q:** Why use async file processing instead of synchronous?
+  **A:** File I/O is blocking and slow - async processing prevents blocking main business operations and improves user experience.
+
+- **Q:** How do you handle large file uploads?
+  **A:** Streaming processing, chunked uploads, progress tracking, and validation during processing.
+
+- **Q:** What happens if file processing fails?
+  **A:** Comprehensive error handling, rollback mechanisms, and user notification with detailed error messages.
+
+### Q32. How do you implement bulk operations efficiently?
+
+**Answer:** I use parallel processing and batch operations for bulk operations:
+
+**Parallel Stock Updates:**
+```java
+@Async("taskExecutor")
+public CompletableFuture<Integer> updateMultipleStockQuantities(List<StockUpdate> updates) {
+    return CompletableFuture.supplyAsync(() -> {
+        // Process updates in parallel streams
+        List<CompletableFuture<Boolean>> futures = updates.stream()
+                .map(update -> CompletableFuture.supplyAsync(() -> 
+                    updateSingleStock(update), taskExecutor))
+                .collect(Collectors.toList());
+        
+        // Wait for all updates to complete
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        
+        return updates.size();
+    });
+}
+```
+
+**Batch Database Operations:**
+```java
+@Repository
+public interface ProductRepository extends JpaRepository<Product, Long> {
+    
+    @Query(value = "INSERT INTO products (sku, name, price, quantity) VALUES (:sku, :name, :price, :quantity)",
+           nativeQuery = true)
+    @Modifying
+    void insertProduct(@Param("sku") String sku, @Param("name") String name, 
+                       @Param("price") BigDecimal price, @Param("quantity") Integer quantity);
+    
+    @Transactional
+    default void bulkInsert(List<Product> products) {
+        for (int i = 0; i < products.size(); i++) {
+            Product product = products.get(i);
+            insertProduct(product.getSku(), product.getName(), 
+                        product.getUnitPrice(), product.getQuantityInStock());
+            
+            // Flush every 20 records to avoid memory issues
+            if (i % 20 == 0) {
+                flush();
+            }
+        }
+    }
+}
+```
+
+**Cross-Questions:**
+- **Q:** How do you handle memory issues with large datasets?
+  **A:** Streaming processing, chunked operations, proper memory management, and monitoring heap usage.
+
+- **Q:** What's the trade-off between parallel and sequential processing?
+  **A:** Parallel is faster for CPU-bound tasks but uses more resources. Sequential is simpler and uses less memory.
+
+- **Q:** How do you ensure data consistency during bulk operations?
+  **A:** Transactions, proper error handling, rollback mechanisms, and validation before processing.
+
+---
+
+## Performance & Scalability Questions
+
+### Q33. How do you ensure high performance under load?
+
+**Answer:** I implement multiple performance optimization strategies:
+
+**Caching Strategy:**
+```java
+@Service
+public class ProductService {
+    
+    @Cacheable(value = "products", key = "#sku")
+    public Product getProductBySku(String sku) {
+        return productRepository.findBySku(sku);
+    }
+    
+    @CacheEvict(value = "products", key = "#product.sku")
+    public Product updateProduct(Product product) {
+        return productRepository.save(product);
+    }
+}
+```
+
+**Connection Pool Optimization:**
+- HikariCP with 5-20 connections
+- Prepared statement caching (250 statements)
+- Connection leak detection
+- Proper timeout settings
+
+**Async Processing:**
+- Multiple thread pools for different operations
+- Non-blocking file operations
+- Parallel bulk updates
+- CompletableFuture for composition
+
+**Database Optimization:**
+- Proper indexing strategy
+- Query optimization
+- Batch processing
+- Connection pooling
+
+**Cross-Questions:**
+- **Q:** How do you measure performance?
+  **A:** Through application metrics, database query analysis, load testing, and APM tools.
+
+- **Q:** What are the key performance indicators?
+  **A:** Response time, throughput, error rate, resource utilization, and user experience metrics.
+
+- **Q:** How do you handle performance degradation?
+  **A:** Monitoring, alerting, auto-scaling, and performance tuning based on metrics.
+
+### Q34. How do you scale the system horizontally?
+
+**Answer:** I implement horizontal scaling through multiple strategies:
+
+**Service Scaling:**
+```yaml
+# Docker Compose scaling
+services:
+  inventory-service:
+    image: inventory-service:latest
+    deploy:
+      replicas: 3
+    environment:
+      - SPRING_PROFILES_ACTIVE=production
+```
+
+**Database Scaling:**
+- Read replicas for read-heavy operations
+- Database sharding for large datasets
+- Connection pooling for efficient resource usage
+
+**Load Balancing:**
+```java
+@Configuration
+public class LoadBalancerConfig {
+    
+    @Bean
+    @LoadBalanced
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+**Cross-Questions:**
+- **Q:** How do you handle session state in a scaled environment?
+  **A:** Stateless design with JWT tokens, or external session stores like Redis.
+
+- **Q:** What are the challenges of horizontal scaling?
+  **A:** Data consistency, distributed transactions, service discovery, and monitoring complexity.
+
+- **Q:** How do you ensure data consistency across multiple instances?
+  **A:** Through distributed transactions, event-driven architecture, or eventual consistency patterns.
+---
+
 ## Final Preparation Tips
 
 ### Key Areas to Focus On:
@@ -643,7 +1210,9 @@ public void createOrder(OrderDto orderDto) {
 5. **Testing**: Unit testing, mocking, integration testing
 6. **DevOps**: Docker, deployment, monitoring
 7. **Performance**: Caching, connection pooling, scalability
-8. **Problem Solving**: Scenarios, trade-offs, best practices
+8. **Multithreading**: Thread pools, async processing, concurrency
+9. **Connection Pooling**: HikariCP, database optimization
+10. **File Processing**: Async I/O, bulk operations, CSV/JSON handling
 
 ### Interview Strategy:
 1. **Start with High-Level**: Explain architecture first
@@ -652,6 +1221,41 @@ public void createOrder(OrderDto orderDto) {
 4. **Scenarios**: Practice common microservices scenarios
 5. **Code Examples**: Be ready to write code snippets
 6. **System Design**: Draw architecture diagrams on whiteboard
+
+### Advanced Topics to Master:
+- **Multithreading**: Thread pool configuration, async patterns, concurrency control
+- **Database Performance**: Connection pooling, query optimization, transaction management
+- **File Operations**: Async processing, bulk operations, streaming
+- **Performance Tuning**: Caching strategies, monitoring, optimization techniques
+- **Scalability**: Horizontal scaling, load balancing, distributed systems
+
+### Code Examples to Remember:
+- Thread pool configuration with @Async
+- HikariCP connection pool setup
+- CompletableFuture usage patterns
+- Async file processing implementations
+- Bulk database operations
+- Transaction management in concurrent environments
+- Thread safety patterns and implementations
+
+### Performance Metrics to Know:
+- Thread pool sizes and configurations
+- Database connection pool settings
+- Response time targets (<200ms)
+- Batch processing sizes (20 records)
+- Cache hit ratios and strategies
+- Concurrent user handling capacity
+
+### Common Interview Scenarios:
+- High-concurrency handling
+- Database performance under load
+- File processing for large datasets
+- Bulk operation optimization
+- Thread pool exhaustion handling
+- Connection pool management
+- Distributed transaction coordination
+
+**Remember**: The enhanced features demonstrate advanced Java expertise and production-ready performance optimization capabilities! 🚀
 
 ### Common Mistakes to Avoid:
 1. **Don't memorize answers**: Understand concepts deeply
