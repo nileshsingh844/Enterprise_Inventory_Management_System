@@ -593,6 +593,10 @@ I implemented JWT-based authentication, comprehensive REST APIs, and Docker cont
 The project demonstrates my expertise in enterprise Java development, microservices architecture, database design, security implementation, and DevOps practices. I wrote over 11,000 lines of code with 95% test coverage using JUnit 5 and Mockito."
 
 ### 2. Architecture Explanation Script
+
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/77166352-9fb1-4b62-8671-68fdea40afe1" />
+
+
 "Let me draw the architecture for you. At the top, we have clients making requests. These go through the API Gateway on port 8080, which acts as the single entry point.
 
 The API Gateway routes requests to the appropriate services. For example, /api/inventory/** goes to the Inventory Service on port 8081, /api/orders/** goes to the Order Service on port 8082, and /api/users/** goes to the User Service on port 8083.
