@@ -594,7 +594,7 @@ The project demonstrates my expertise in enterprise Java development, microservi
 
 ### 2. Architecture Explanation Script
 
-<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/77166352-9fb1-4b62-8671-68fdea40afe1" />
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/9324438a-1311-4de1-a2ca-624356ce41e2" />
 
 
 "Let me draw the architecture for you. At the top, we have clients making requests. These go through the API Gateway on port 8080, which acts as the single entry point.
